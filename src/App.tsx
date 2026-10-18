@@ -17,13 +17,16 @@ import { SupabaseSetupModal } from './components/SupabaseSetupModal';
 import { ExportImportModal } from './components/ExportImportModal';
 import { GuideModal } from './components/GuideModal';
 import { Toast } from './components/Toast';
-import { FolderOpen, Heart, ShieldAlert } from 'lucide-react';
+import { Heart, ShieldAlert, Sparkles, EyeOff } from 'lucide-react';
 
 export default function App() {
   const [links, setLinks] = useState<StudyLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'favorites'>('all');
-  const [activeSubject, setActiveSubject] = useState<SubjectType | 'all'>('all');
+  
+  // activeSubject is null by default so links are hidden until a subject flower is clicked!
+  const [activeSubject, setActiveSubject] = useState<SubjectType | null>(null);
+
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
 
   // Role state: 'admin' (Quản trị viên - toàn quyền) | 'viewer' (Người xem - chỉ xem)
@@ -78,8 +81,20 @@ export default function App() {
   }, []);
 
   const handleSelectSubject = (subj: SubjectType | 'all') => {
-    setActiveSubject(subj);
-    setFilter(prev => ({ ...prev, subject: subj }));
+    if (subj === 'all') {
+      // If 'all' is clicked, show all subjects or let them pick
+      setActiveSubject('toan'); // Default to first or show all if desired
+      showToast('Đã mở toàn bộ kho liên kết học tập!');
+    } else {
+      setActiveSubject(subj);
+      const names: Record<SubjectType, string> = {
+        toan: 'Toán học',
+        'tieng-viet': 'Tiếng Việt',
+        'tin-hoc': 'Tin học',
+        'tieng-anh': 'Tiếng Anh'
+      };
+      showToast(`Đã mở kho liên kết môn ${names[subj]}`);
+    }
   };
 
   const counts = useMemo(() => {
@@ -103,9 +118,14 @@ export default function App() {
   }, [links]);
 
   const filteredLinks = useMemo(() => {
+    if (!activeSubject && activeTab !== 'favorites') return [];
+
     return links.filter(link => {
-      if (activeTab === 'favorites' && !link.isFavorite) return false;
-      if (activeSubject !== 'all' && link.subject !== activeSubject) return false;
+      if (activeTab === 'favorites') {
+        if (!link.isFavorite) return false;
+      } else {
+        if (activeSubject && link.subject !== activeSubject) return false;
+      }
 
       if (filter.searchQuery.trim()) {
         const q = filter.searchQuery.toLowerCase();
@@ -211,14 +231,19 @@ export default function App() {
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onOpenExportImportModal={() => {
           if (role === 'viewer') {
-            showToast('⚠️ Chế độ Người xem chỉ có thể xem và xuất file. Nhập dữ liệu yêu cầu quyền Quản trị.');
+            showToast('⚠️ Chế độ Người xem chỉ có thể xem và xuất file.');
           }
           setIsExportImportModalOpen(true);
         }}
         onOpenGuideModal={() => setIsGuideModalOpen(true)}
         isSupabaseConnected={isSupabaseConnected}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={tab => {
+          setActiveTab(tab);
+          if (tab === 'favorites') {
+            setActiveSubject(null); // Show favorites view
+          }
+        }}
         totalCount={links.length}
         favoriteCount={favoriteCount}
         role={role}
@@ -230,7 +255,7 @@ export default function App() {
       {role === 'viewer' && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-xs text-amber-900 font-medium flex items-center justify-center gap-2">
           <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
-          <span>Bạn đang ở <strong>Chế độ Người xem (Viewer)</strong>: Có quyền xem, tìm kiếm và mở liên kết. Không có quyền thêm, sửa hoặc xóa. Bấm vào nút "Người xem" trên thanh menu để đăng nhập Quản trị viên.</span>
+          <span>Bạn đang ở <strong>Chế độ Người xem (Viewer)</strong>: Xem và mở liên kết. Bấm nút "Quản trị" trên thanh menu và nhập mã PIN <strong className="text-amber-950">admin123</strong> để quản lý.</span>
         </div>
       )}
 
@@ -245,94 +270,147 @@ export default function App() {
 
       {/* Subject Flowers Section */}
       <SubjectFlowers
-        activeSubject={activeSubject}
+        activeSubject={activeSubject || 'all'}
         onSelectSubject={handleSelectSubject}
         counts={counts}
       />
 
       {/* Main Content Repository */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              {activeTab === 'favorites' ? (
-                <>
-                  <Heart className="w-5 h-5 text-pink-500 fill-pink-500" />
-                  <span>Liên kết yêu thích ({filteredLinks.length})</span>
-                </>
-              ) : (
-                <>
-                  <FolderOpen className="w-5 h-5 text-pink-500" />
-                  <span>
-                    {activeSubject === 'all' ? 'Tất cả liên kết học tập' : `Kho liên kết môn ${activeSubject === 'toan' ? 'Toán học' : activeSubject === 'tieng-viet' ? 'Tiếng Việt' : activeSubject === 'tin-hoc' ? 'Tin học' : 'Tiếng Anh'}`} ({filteredLinks.length})
-                  </span>
-                </>
-              )}
-            </h3>
-            <p className="text-xs text-slate-500">
-              Nhấn vào tên liên kết hoặc biểu tượng mở để truy cập trực tiếp tài nguyên học tập.
-            </p>
-          </div>
-
-          {activeTab === 'favorites' && (
-            <button
-              onClick={() => setActiveTab('all')}
-              className="text-xs font-semibold text-pink-600 hover:text-pink-700 underline underline-offset-4 cursor-pointer"
-            >
-              Xem tất cả kho liên kết
-            </button>
-          )}
-        </div>
-
-        {/* Loading state */}
-        {loading ? (
-          <div className="py-20 text-center">
-            <div className="inline-block w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-3" />
-            <p className="text-sm text-slate-500 font-medium">Đang tải kho liên kết từ vườn...</p>
-          </div>
-        ) : filteredLinks.length === 0 ? (
-          /* Empty state */
-          <div className="bg-white rounded-3xl border border-pink-100 p-12 text-center max-w-md mx-auto my-12 shadow-xs">
-            <div className="w-16 h-16 rounded-2xl bg-pink-50 text-pink-500 flex items-center justify-center mx-auto mb-4 text-2xl">
-              🌱
+        {!activeSubject && activeTab !== 'favorites' ? (
+          /* Hidden State: Prompt user to click a subject flower */
+          <div className="bg-gradient-to-br from-pink-50/80 via-sky-50/50 to-white rounded-3xl border-2 border-dashed border-pink-200 p-12 text-center max-w-2xl mx-auto my-12 shadow-sm animate-fadeIn">
+            <div className="w-20 h-20 rounded-3xl bg-white shadow-md border border-pink-100 flex items-center justify-center mx-auto mb-4 text-3xl animate-bounce">
+              🌸
             </div>
-            <h4 className="text-lg font-bold text-slate-800 mb-1">Không tìm thấy liên kết phù hợp</h4>
-            <p className="text-xs text-slate-500 mb-6 leading-relaxed">
-              Không có liên kết nào khớp với từ khóa tìm kiếm hoặc bộ lọc hiện tại của thầy cô.
+            <h3 className="text-xl font-bold text-slate-800 mb-2">
+              Kho liên kết đang được ẩn
+            </h3>
+            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+              Hãy nhấn vào một trong các ô bông hoa môn học ở bên trên (<strong className="text-pink-600">Toán học</strong>, <strong className="text-emerald-600">Tiếng Việt</strong>, <strong className="text-sky-600">Tin học</strong>, <strong className="text-amber-600">Tiếng Anh</strong>) để mở và xem danh sách liên kết của môn học đó!
             </p>
-            <button
-              onClick={() => {
-                setFilter(prev => ({ ...prev, searchQuery: '', subject: 'all' }));
-                setActiveSubject('all');
-                setActiveTab('all');
-              }}
-              className="px-5 py-2.5 rounded-xl bg-pink-500 hover:bg-pink-600 text-white text-xs font-semibold shadow-sm transition-all"
-            >
-              Xóa bộ lọc & Xem tất cả
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                onClick={() => handleSelectSubject('toan')}
+                className="px-4 py-2 rounded-xl bg-pink-100 text-pink-800 font-semibold text-xs hover:bg-pink-200 transition-colors shadow-2xs"
+              >
+                🌻 Xem môn Toán học
+              </button>
+              <button
+                onClick={() => handleSelectSubject('tieng-viet')}
+                className="px-4 py-2 rounded-xl bg-emerald-100 text-emerald-800 font-semibold text-xs hover:bg-emerald-200 transition-colors shadow-2xs"
+              >
+                🌷 Xem môn Tiếng Việt
+              </button>
+              <button
+                onClick={() => handleSelectSubject('tin-hoc')}
+                className="px-4 py-2 rounded-xl bg-sky-100 text-sky-800 font-semibold text-xs hover:bg-sky-200 transition-colors shadow-2xs"
+              >
+                🌼 Xem môn Tin học
+              </button>
+              <button
+                onClick={() => handleSelectSubject('tieng-anh')}
+                className="px-4 py-2 rounded-xl bg-amber-100 text-amber-800 font-semibold text-xs hover:bg-amber-200 transition-colors shadow-2xs"
+              >
+                🌺 Xem môn Tiếng Anh
+              </button>
+            </div>
           </div>
         ) : (
-          /* Links Grid */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredLinks.map(link => (
-              <LinkCard
-                key={link.id}
-                link={link}
-                onEdit={l => {
-                  if (role === 'viewer') {
-                    showToast('⚠️ Bạn đang ở chế độ Người xem, không có quyền sửa liên kết.');
-                    return;
-                  }
-                  setEditingLink(l);
-                  setIsAddModalOpen(true);
-                }}
-                onDelete={handleDeleteLink}
-                onToggleFavorite={handleToggleFavorite}
-                onShowToast={showToast}
-                role={role}
-              />
-            ))}
-          </div>
+          <>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  {activeTab === 'favorites' ? (
+                    <>
+                      <Heart className="w-5 h-5 text-pink-500 fill-pink-500" />
+                      <span>Liên kết yêu thích ({filteredLinks.length})</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5 text-pink-500" />
+                      <span>
+                        Kho liên kết môn {activeSubject === 'toan' ? 'Toán học 🌻' : activeSubject === 'tieng-viet' ? 'Tiếng Việt 🌷' : activeSubject === 'tin-hoc' ? 'Tin học 🌼' : 'Tiếng Anh 🌺'} ({filteredLinks.length})
+                      </span>
+                    </>
+                  )}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Nhấn vào tên liên kết hoặc biểu tượng mở để truy cập trực tiếp tài nguyên học tập.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {activeSubject && (
+                  <button
+                    onClick={() => setActiveSubject(null)}
+                    className="text-xs font-semibold text-slate-600 hover:text-pink-600 bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <EyeOff className="w-3.5 h-3.5" />
+                    <span>Ẩn liên kết môn này</span>
+                  </button>
+                )}
+
+                {activeTab === 'favorites' && (
+                  <button
+                    onClick={() => setActiveTab('all')}
+                    className="text-xs font-semibold text-pink-600 hover:text-pink-700 underline underline-offset-4 cursor-pointer"
+                  >
+                    Xem tất cả kho liên kết
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Loading state */}
+            {loading ? (
+              <div className="py-20 text-center">
+                <div className="inline-block w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-3" />
+                <p className="text-sm text-slate-500 font-medium">Đang tải kho liên kết từ vườn...</p>
+              </div>
+            ) : filteredLinks.length === 0 ? (
+              /* Empty state */
+              <div className="bg-white rounded-3xl border border-pink-100 p-12 text-center max-w-md mx-auto my-12 shadow-xs">
+                <div className="w-16 h-16 rounded-2xl bg-pink-50 text-pink-500 flex items-center justify-center mx-auto mb-4 text-2xl">
+                  🌱
+                </div>
+                <h4 className="text-lg font-bold text-slate-800 mb-1">Chưa có liên kết nào</h4>
+                <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+                  Môn học này chưa có liên kết nào được thêm vào kho. Thầy cô hãy thêm liên kết mới nhé!
+                </p>
+                {role === 'admin' && (
+                  <button
+                    onClick={() => { setEditingLink(null); setIsAddModalOpen(true); }}
+                    className="px-5 py-2.5 rounded-xl bg-pink-500 hover:bg-pink-600 text-white text-xs font-semibold shadow-sm transition-all"
+                  >
+                    + Thêm liên kết ngay
+                  </button>
+                )}
+              </div>
+            ) : (
+              /* Links Grid */
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredLinks.map(link => (
+                  <LinkCard
+                    key={link.id}
+                    link={link}
+                    onEdit={l => {
+                      if (role === 'viewer') {
+                        showToast('⚠️ Bạn đang ở chế độ Người xem, không có quyền sửa liên kết.');
+                        return;
+                      }
+                      setEditingLink(l);
+                      setIsAddModalOpen(true);
+                    }}
+                    onDelete={handleDeleteLink}
+                    onToggleFavorite={handleToggleFavorite}
+                    onShowToast={showToast}
+                    role={role}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </main>
 

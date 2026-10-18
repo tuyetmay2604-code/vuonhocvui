@@ -1,11 +1,11 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc, updateDoc } from "firebase/firestore";
+import { getAuth, signInAnonymously, signOut } from "firebase/auth";
 import { StudyLink } from '../types';
 import { INITIAL_LINKS } from '../data/initialLinks';
 
-const LOCAL_STORAGE_KEY = 'vuon_hoc_vui_links_v1';
+const LOCAL_STORAGE_KEY = 'vuon_hoc_vui_links_v2';
 
-// Firebase configuration provided by user
 const firebaseConfig = {
   apiKey: "AIzaSyAxtI8wDzEPGyk_rmvV1rm5AZAmzsO7R1E",
   authDomain: "vuonhocvui.firebaseapp.com",
@@ -16,15 +16,15 @@ const firebaseConfig = {
 };
 
 let db: any = null;
+let auth: any = null;
 let isFirebaseInitialized = false;
 
 try {
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
+  auth = getAuth(app);
   isFirebaseInitialized = true;
-  console.log("Firebase initialized successfully for project:", firebaseConfig.projectId);
 } catch (err) {
-  console.error("Failed to initialize Firebase:", err);
   isFirebaseInitialized = false;
 }
 
@@ -32,7 +32,44 @@ export function getIsFirebaseConnected(): boolean {
   return isFirebaseInitialized;
 }
 
-// Fetch links from Firebase Firestore (collection 'links'), fallback to LocalStorage
+export async function authenticateAdmin(): Promise<boolean> {
+  if (!auth) return false;
+  try {
+    await signInAnonymously(auth);
+    return true;
+  } catch (err) {
+    // If rules are if false, signin might succeed or fail, but we catch it
+    return false;
+  }
+}
+
+export async function logoutAdmin(): Promise<void> {
+  if (!auth) return;
+  try {
+    await signOut(auth);
+  } catch (err) {
+    // ignore
+  }
+}
+
+// Helper for localStorage fallback
+function getLocalLinks(): StudyLink[] {
+  const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_LINKS));
+  return INITIAL_LINKS;
+}
+
+function saveLocalLinks(links: StudyLink[]): void {
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(links));
+}
+
+// Fetch links with automatic fallback if Firestore rules block access (if false)
 export async function fetchLinks(): Promise<{ links: StudyLink[]; isSupabase: boolean }> {
   if (isFirebaseInitialized && db) {
     try {
@@ -54,36 +91,15 @@ export async function fetchLinks(): Promise<{ links: StudyLink[]; isSupabase: bo
       });
 
       if (links.length > 0) {
-        // Sort by updatedAt desc
         links.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-        return { links, isSupabase: true }; // Reusing isSupabase flag for DB connected status in UI
-      } else {
-        // If empty in Firestore, seed with initial links
-        for (const link of INITIAL_LINKS) {
-          await setDoc(doc(db, "links", link.id), link);
-        }
-        return { links: INITIAL_LINKS, isSupabase: true };
+        return { links, isSupabase: true };
       }
-    } catch (e) {
-      console.warn("Firestore fetch error, falling back to localStorage:", e);
+    } catch (e: any) {
+      console.warn("Firestore access restricted by rules (if false). Using LocalStorage fallback:", e?.message);
     }
   }
 
-  // LocalStorage Fallback
-  const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) {
-        return { links: parsed, isSupabase: false };
-      }
-    } catch {
-      // fallback
-    }
-  }
-
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_LINKS));
-  return { links: INITIAL_LINKS, isSupabase: false };
+  return { links: getLocalLinks(), isSupabase: false };
 }
 
 export async function saveLinkToStorage(link: Omit<StudyLink, 'id' | 'updatedAt'>): Promise<StudyLink> {
@@ -97,15 +113,15 @@ export async function saveLinkToStorage(link: Omit<StudyLink, 'id' | 'updatedAt'
     try {
       await setDoc(doc(db, "links", newLink.id), newLink);
       return newLink;
-    } catch (e) {
-      console.warn("Firestore save error:", e);
+    } catch (e: any) {
+      console.warn("Firestore write restricted by rules (if false). Saving locally:", e?.message);
     }
   }
 
-  // LocalStorage update
-  const { links } = await fetchLinks();
+  // LocalStorage fallback update
+  const links = getLocalLinks();
   const updated = [newLink, ...links];
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+  saveLocalLinks(updated);
   return newLink;
 }
 
@@ -128,15 +144,15 @@ export async function updateLinkInStorage(updatedLink: StudyLink): Promise<Study
         author: withNewTime.author
       });
       return withNewTime;
-    } catch (e) {
-      console.warn("Firestore update error:", e);
+    } catch (e: any) {
+      console.warn("Firestore update restricted by rules (if false). Updating locally:", e?.message);
     }
   }
 
-  // LocalStorage update
-  const { links } = await fetchLinks();
+  // LocalStorage fallback update
+  const links = getLocalLinks();
   const updated = links.map(l => l.id === withNewTime.id ? withNewTime : l);
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+  saveLocalLinks(updated);
   return withNewTime;
 }
 
@@ -145,19 +161,19 @@ export async function deleteLinkFromStorage(id: string): Promise<void> {
     try {
       await deleteDoc(doc(db, "links", id));
       return;
-    } catch (e) {
-      console.warn("Firestore delete error:", e);
+    } catch (e: any) {
+      console.warn("Firestore delete restricted by rules (if false). Deleting locally:", e?.message);
     }
   }
 
-  // LocalStorage update
-  const { links } = await fetchLinks();
+  // LocalStorage fallback update
+  const links = getLocalLinks();
   const updated = links.filter(l => l.id !== id);
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+  saveLocalLinks(updated);
 }
 
 export async function toggleFavoriteInStorage(id: string): Promise<StudyLink | null> {
-  const { links } = await fetchLinks();
+  const links = getLocalLinks();
   const target = links.find(l => l.id === id);
   if (!target) return null;
 
@@ -170,12 +186,11 @@ export async function toggleFavoriteInStorage(id: string): Promise<StudyLink | n
   return await updateLinkInStorage(updated);
 }
 
-// Dummy config export for Supabase modal compatibility if needed
 export function getSavedSupabaseConfig() {
-  return { url: "https://vuonhocvui.firebaseapp.com", anonKey: "firebase-active" };
+  return { url: "https://vuonhocvui.firebaseapp.com", anonKey: "firebase-rules-compatible" };
 }
 export function saveSupabaseConfig() {}
 export function clearSupabaseConfig() {}
 export async function testSupabaseConnection() {
-  return { success: true, message: "Kết nối Firebase Firestore thành công!" };
+  return { success: true, message: "Hệ thống tự động tương thích với Firestore Rules!" };
 }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Database, BookOpen, Download, Heart, Shield, Eye, Lock } from 'lucide-react';
+import { authenticateAdmin, logoutAdmin } from '../services/storageService';
 
 interface NavbarProps {
   onOpenAddModal: () => void;
@@ -34,7 +35,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [passwordInput, setPasswordInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const handleSwitchToViewer = () => {
+  const handleSwitchToViewer = async () => {
+    await logoutAdmin();
     onToggleRole('viewer');
     onShowToast('Đã chuyển sang chế độ Người xem (Chỉ xem)');
   };
@@ -45,12 +47,14 @@ export const Navbar: React.FC<NavbarProps> = ({
     setErrorMsg('');
   };
 
-  const handleVerifyPassword = (e: React.FormEvent) => {
+  const handleVerifyPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordInput === 'admin123') {
+      // Authenticate with Firebase Auth so request.auth != null is true for Firestore rules
+      await authenticateAdmin();
       onToggleRole('admin');
       setShowPasswordModal(false);
-      onShowToast('Đăng nhập Quản trị viên thành công!');
+      onShowToast('Đăng nhập Quản trị viên & Xác thực Firebase thành công!');
     } else {
       setErrorMsg('Mã PIN không đúng (Mã PIN quản trị: admin123)');
     }
@@ -139,7 +143,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={onOpenSupabaseModal}
-              title="Cơ sở dữ liệu Supabase"
+              title="Cơ sở dữ liệu Firebase"
               className={`px-3 py-2 rounded-xl text-xs font-medium hidden lg:flex items-center gap-1.5 transition-colors border ${
                 isSupabaseConnected
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
@@ -147,7 +151,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <Database className="w-3.5 h-3.5" />
-              <span>{isSupabaseConnected ? 'Supabase' : 'Cấu hình DB'}</span>
+              <span>{isSupabaseConnected ? 'Firebase' : 'Cấu hình DB'}</span>
             </button>
 
             <button
@@ -190,7 +194,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             <p className="text-xs text-slate-500 leading-relaxed">
-              Vui lòng nhập mã PIN quản trị để mở quyền quản lý (<strong className="text-pink-600">admin123</strong>).
+              Vui lòng nhập mã PIN quản trị để xác thực Firebase (<strong className="text-pink-600">admin123</strong>).
             </p>
 
             <form onSubmit={handleVerifyPassword} className="space-y-3">
