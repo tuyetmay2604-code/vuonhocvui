@@ -24,7 +24,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'favorites'>('all');
   
-  // activeSubject is null by default so links are hidden until a subject flower is clicked!
+  // activeSubject is null by default so link frame is completely hidden until a subject flower is clicked!
   const [activeSubject, setActiveSubject] = useState<SubjectType | null>(null);
 
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
@@ -82,9 +82,8 @@ export default function App() {
 
   const handleSelectSubject = (subj: SubjectType | 'all') => {
     if (subj === 'all') {
-      // If 'all' is clicked, show all subjects or let them pick
-      setActiveSubject('toan'); // Default to first or show all if desired
-      showToast('Đã mở toàn bộ kho liên kết học tập!');
+      setActiveSubject('toan');
+      showToast('Đã mở kho liên kết môn Toán học');
     } else {
       setActiveSubject(subj);
       const names: Record<SubjectType, string> = {
@@ -241,7 +240,7 @@ export default function App() {
         setActiveTab={tab => {
           setActiveTab(tab);
           if (tab === 'favorites') {
-            setActiveSubject(null); // Show favorites view
+            setActiveSubject(null);
           }
         }}
         totalCount={links.length}
@@ -275,50 +274,11 @@ export default function App() {
         counts={counts}
       />
 
-      {/* Main Content Repository */}
+      {/* Main Content Repository - Completely hidden by default until a subject is clicked */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-        {!activeSubject && activeTab !== 'favorites' ? (
-          /* Hidden State: Prompt user to click a subject flower */
-          <div className="bg-gradient-to-br from-pink-50/80 via-sky-50/50 to-white rounded-3xl border-2 border-dashed border-pink-200 p-12 text-center max-w-2xl mx-auto my-12 shadow-sm animate-fadeIn">
-            <div className="w-20 h-20 rounded-3xl bg-white shadow-md border border-pink-100 flex items-center justify-center mx-auto mb-4 text-3xl animate-bounce">
-              🌸
-            </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-2">
-              Kho liên kết đang được ẩn
-            </h3>
-            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-              Hãy nhấn vào một trong các ô bông hoa môn học ở bên trên (<strong className="text-pink-600">Toán học</strong>, <strong className="text-emerald-600">Tiếng Việt</strong>, <strong className="text-sky-600">Tin học</strong>, <strong className="text-amber-600">Tiếng Anh</strong>) để mở và xem danh sách liên kết của môn học đó!
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <button
-                onClick={() => handleSelectSubject('toan')}
-                className="px-4 py-2 rounded-xl bg-pink-100 text-pink-800 font-semibold text-xs hover:bg-pink-200 transition-colors shadow-2xs"
-              >
-                🌻 Xem môn Toán học
-              </button>
-              <button
-                onClick={() => handleSelectSubject('tieng-viet')}
-                className="px-4 py-2 rounded-xl bg-emerald-100 text-emerald-800 font-semibold text-xs hover:bg-emerald-200 transition-colors shadow-2xs"
-              >
-                🌷 Xem môn Tiếng Việt
-              </button>
-              <button
-                onClick={() => handleSelectSubject('tin-hoc')}
-                className="px-4 py-2 rounded-xl bg-sky-100 text-sky-800 font-semibold text-xs hover:bg-sky-200 transition-colors shadow-2xs"
-              >
-                🌼 Xem môn Tin học
-              </button>
-              <button
-                onClick={() => handleSelectSubject('tieng-anh')}
-                className="px-4 py-2 rounded-xl bg-amber-100 text-amber-800 font-semibold text-xs hover:bg-amber-200 transition-colors shadow-2xs"
-              >
-                🌺 Xem môn Tiếng Anh
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        {(activeSubject || activeTab === 'favorites') && (
+          <div className="animate-fadeIn">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pt-4 border-t border-pink-100">
               <div>
                 <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                   {activeTab === 'favorites' ? (
@@ -347,16 +307,16 @@ export default function App() {
                     className="text-xs font-semibold text-slate-600 hover:text-pink-600 bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     <EyeOff className="w-3.5 h-3.5" />
-                    <span>Ẩn liên kết môn này</span>
+                    <span>Ẩn khung liên kết</span>
                   </button>
                 )}
 
                 {activeTab === 'favorites' && (
                   <button
-                    onClick={() => setActiveTab('all')}
+                    onClick={() => { setActiveTab('all'); setActiveSubject(null); }}
                     className="text-xs font-semibold text-pink-600 hover:text-pink-700 underline underline-offset-4 cursor-pointer"
                   >
-                    Xem tất cả kho liên kết
+                    Đóng yêu thích
                   </button>
                 )}
               </div>
@@ -410,7 +370,7 @@ export default function App() {
                 ))}
               </div>
             )}
-          </>
+          </div>
         )}
       </main>
 
